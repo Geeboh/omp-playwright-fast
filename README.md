@@ -1,24 +1,78 @@
-# OMP Playwright Fast v2.0 — plugin-first browser QA
 # OMP Playwright Fast v2.0.3 — plugin-first browser QA
 
 > **v2.0.3 release:** Adds debug console capture and bounded inspection alongside the existing version fingerprinting and diagnostics.
+
 A reusable OMP plugin bundling a discoverable skill, slash command, model-callable browser QA tool, and smart CLI. v2 upgrades the earlier standalone v1 skill. No Python dependency.
 
+## Upgrade and verify loaded plugin (important)
+
+v2.0.0 accidentally called `spawn(process.execPath, ...)` from the OMP extension.
+In a Bun-compiled OMP host, `process.execPath` points to `omp`, **not** Node.
+The observed `unknown flag: --browser`, `No default model selected`, and misleading
+`Exit: 0 / doctor failed` messages stem from launching nested OMP instead of the
+Playwright runner. Removing `--browser` or configuring another model will not fix it.
+
 **Preferred repair:** Keep the plugin in a stable directory, extract v2.0.3 there, relink to that exact directory, then fully restart the OMP PROCESS (not merely the model session). For example, from the parent containing `omp-playwright-fast-v2/`:
+
+```bash
+# Back up local edits first if you modified the plugin.
 unzip -o /path/to/omp-playwright-fast-v2.0.3.zip
+# Explicitly set the global plugin link to this corrected location.
+cd omp-playwright-fast-v2
+node scripts/diagnose-install.mjs --project /code/tadaproject/The-Adaptive-Disaster-Appliance
+omp plugin link "$PWD"
+# QUIT all OMP processes that can hold this old extension, then start a fresh OMP process.
+# In fresh OMP: /pw-fast version
+```
+
+Relinking the same package name with `omp plugin link "$PWD"` updates its global link. Project plugin copies and native `.omp/extensions` may still shadow or duplicate it: the diagnostic identifies common locations but does not delete them. Inspect them before removing anything. If you are using named OMP profiles or unusual config roots, also inspect `omp plugin list` for the exact active profile.
+
 v2.0.3 explicitly starts `node` (never `process.execPath`) for the CLI runner,
+reports failed subprocesses as failed tools, and safely formats subprocess errors.
+Node.js 20+ must be on PATH inside the OMP environment. If it is installed somewhere
+else, set `OMP_PLAYWRIGHT_NODE=/absolute/path/to/node` **before starting OMP**.
+
+Verification in the target web project, in a **new OMP process**:
+
+```text
 /pw-fast version   # MUST report v2.0.3 and the loaded extension path
+/pw-fast version
+/pw-fast doctor
+/pw-fast plan --profile affected --browser chromium
+```
+
+Direct runtime sanity check (bypasses the OMP extension):
+
+```bash
+node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs version
+node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs doctor --browser chromium
+```
+
+If `/pw-fast version` is unrecognized or reports the wrong version, the new extension has not loaded; do not retry `setup` with fewer arguments. Verify OMP profile, plugin paths, native extensions, and fully restart the host.
+
+The `Task Plan` semantic assessment error is independent. Write each OMP plan step
+as one specific action with one measurable result; split combined multi-action
+steps before retrying the plan.
+
+## Regression tests
+
+From the plugin root, run `npm test`. The test suite uses a fake Playwright CLI
+and validates doctor, affected planning, run summaries, zero-test rejection, all-browser setup,
+version identity, plugin inventory diagnostics and extension tool registration/Node launching/error propagation. The TypeScript
+extension integration test runs on Node 22+; on Node 20 it is skipped, while the
+CLI tests still run. These tests do **not** download browsers or launch a real OMP
+session; a live OMP integration and all three browser engines still need
+verification in the actual project.
+
 ## Install (recommended)
 
 ```bash
-unzip omp-playwright-fast-v2.0.zip
 unzip omp-playwright-fast-v2.0.3.zip
 cd omp-playwright-fast-v2
 ./install.sh --plugin
 # equivalent: omp plugin link "$PWD"
 ```
 
-Plugin links target a local directory; **do not delete or move the extracted folder after linking**. For distribution, publish to a git repository with package.json and then install by a pinned git ref (e.g. `omp plugin install 'git+https://github.com/ORG/REPO.git#v2.0.0'` once it exists). No remote repo is assumed to exist yet. Restart OMP or reload plugins after installation. Check `omp plugin list`.
 Plugin links target a local directory; **do not delete or move the extracted folder after linking**. For distribution, publish to a git repository with package.json and then install by a pinned git ref (e.g. `omp plugin install 'git+https://github.com/ORG/REPO.git#v2.0.3'` once it exists). No remote repo is assumed to exist yet. Restart OMP or reload plugins after installation. Check `omp plugin list`.
 
 Standalone fallback (does not register extension tools): `./install.sh --global-skill` or `./install.sh --project-skill /code/project`. Avoid installing both copies under the same skill name; native skill locations have higher discovery priority than plugin-bundled skills.
@@ -30,6 +84,7 @@ Copy **AGENTS.snippet.md** into your global OMP AGENTS.md (where your OMP versio
 ## Usage within OMP
 
 ```
+/pw-fast version
 /pw-fast doctor
 /pw-fast plan --profile affected
 /pw-fast run --profile affected
@@ -43,6 +98,7 @@ You can also ask OMP to test changed browser behavior and it can choose the `pla
 ## Direct CLI from project root
 
 ```bash
+node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs version
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs doctor
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs setup --browser chromium
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs plan --profile affected
@@ -51,6 +107,10 @@ node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs setup --browser all
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs run --profile matrix
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs debug --lines 80
 ```
+
+**Read-only install diagnostics:** `node scripts/diagnose-install.mjs --project /code/tadaproject/The-Adaptive-Disaster-Appliance` reports global/project plugin copies and likely duplicate native extensions; it never deletes or updates anything. `./install.sh --diagnose --project /code/tadaproject/The-Adaptive-Disaster-Appliance` is equivalent. Note that non-default OMP profiles/custom config paths may require extra checks.
+
+**Immediate setup bypass:** from your web project root, run `node /absolute/path/to/omp-playwright-fast-v2/bin/pw-smart.mjs setup --browser all` to install browsers without going through a potentially stale OMP extension.
 
 `--dry-run` works with setup and run. `plan` is inherently non-executing. `--with-deps` permits Playwright to install Linux system packages (may require root); it is never the default. `--workers N` caps concurrency at 32; default clamps to 4, free memory, and available CPU. `--base REF` specifies git comparison ref (default HEAD; working-tree edits and untracked files are included). Existing Playwright config is respected. Set up your test configuration yourself if none exists, using `skills/playwright-fast/templates/playwright.config.ts` as a starting point.
 

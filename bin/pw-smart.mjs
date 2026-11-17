@@ -21,17 +21,16 @@ for (let i=0;i<args.length;i++) {
     const key = x.slice(2).replace(/-([a-z])/g, (_,s)=>s.toUpperCase()); opts[key] = args[++i];
   } else if (x==='--dry-run') opts.dryRun=true;
   else if (x==='--with-deps') opts.withDeps=true;
-  else if (x==='--help' || x==='-h') { console.log('pw-smart.mjs doctor|setup|plan|run --profile quick|smoke|affected|failed|matrix|full --browser chromium|firefox|webkit|all --workers N --base REF --dry-run --with-deps'); process.exit(0); }
   else if (x==='--help' || x==='-h') { console.log('pw-smart.mjs version|doctor|setup|plan|run|debug --profile quick|smoke|affected|failed|matrix|full --browser chromium|firefox|webkit|all --workers N --base REF --lines N --dry-run --with-deps'); process.exit(0); }
   else die(`unknown option ${x}`);
 }
-if (!['doctor','setup','plan','run'].includes(command)) die('invalid command');
 if (!['version','doctor','setup','plan','run','debug'].includes(command)) die('invalid command');
 if (!validProfiles.includes(opts.profile)) die('invalid profile');
 if (!browsers.includes(opts.browser)) die('invalid browser');
 if (opts.workers != null && (!/^\d+$/.test(String(opts.workers)) || +opts.workers<1 || +opts.workers>32)) die('workers must be 1..32');
-if (!existsSync('package.json')) die('run from the web project root (package.json missing)');
 if (!/^\d+$/.test(String(opts.lines)) || +opts.lines<1 || +opts.lines>10000) die('lines must be 1..10000');
+const packagePresent = existsSync('package.json');
+if (command === 'version') { console.log(`Playwright Fast runner v${RUNNER_VERSION}`); process.exit(0); }
 if (command === 'debug') {
   const consolePath = resolve(DIR, 'last-run.console.log');
   if (!existsSync(consolePath)) die('no captured console output; run Playwright first');
@@ -39,6 +38,7 @@ if (command === 'debug') {
   console.log(output ? output.split('\n').slice(-+opts.lines).join('\n') : '(no console output captured)');
   process.exit(0);
 }
+if (!packagePresent && command !== 'doctor') die('run from the web project root (package.json missing)');
 const pm = existsSync('bun.lock') || existsSync('bun.lockb') ? 'bun' : existsSync('pnpm-lock.yaml') ? 'pnpm' : existsSync('yarn.lock') ? 'yarn' : 'npm';
 const pw = resolve(ROOT, 'node_modules/.bin/playwright');
 const hasPW = existsSync(pw);
@@ -94,7 +94,7 @@ function impacts() {
 }
 function runGitInfo() { const status=git(['rev-parse','--is-inside-work-tree']); return status.status===0; }
 if (command==='doctor') {
-  console.log(JSON.stringify({ root: ROOT, packageManager:pm, playwrightInstalled:hasPW, configPresent:hasConfig, git:runGitInfo(), cpu, availableMemoryGiB:+(freemem()/1024**3).toFixed(1), suggestedWorkers:workers },null,2)); process.exit(0);
+  console.log(JSON.stringify({ runnerVersion:RUNNER_VERSION, root: ROOT, packageJsonPresent:packagePresent, packageManager:pm, playwrightInstalled:hasPW, configPresent:hasConfig, git:runGitInfo(), cpu, availableMemoryGiB:+(freemem()/1024**3).toFixed(1), suggestedWorkers:workers },null,2)); process.exit(0);
 }
 if (command==='setup') {
   const add = pm==='pnpm'?['pnpm',['add','-D','@playwright/test']]:pm==='yarn'?['yarn',['add','-D','@playwright/test']]:pm==='bun'?['bun',['add','-d','@playwright/test']]:['npm',['install','--save-dev','@playwright/test']];
@@ -117,7 +117,7 @@ if (!matrix && opts.browser!=='all') cli.push(`--project=${opts.browser}`);
 if (profile==='smoke') cli.push('--grep','@smoke');
 if (profile==='failed') cli.push('--last-failed');
 cli.push('--workers',String(workers));
-const plan={ action:command, profile, browser:chosen, workers, impact, selection, commandLine:[pw,...cli], dryRun:opts.dryRun, warning:profile==='affected' && impact.mode==='fallback-all'?`Full selected-browser fallback: ${impact.reason}`:null };
+const plan={ runnerVersion:RUNNER_VERSION, action:command, profile, browser:chosen, workers, impact, selection, commandLine:[pw,...cli], dryRun:opts.dryRun, warning:profile==='affected' && impact.mode==='fallback-all'?`Full selected-browser fallback: ${impact.reason}`:null };
 console.log(JSON.stringify(plan,null,2));
 if (command==='plan'||opts.dryRun) process.exit(0);
 mkdirSync(DIR,{recursive:true});
@@ -146,7 +146,8 @@ if(parsed) {
   history.push(entry); writeFileSync(historyPath, JSON.stringify(history.slice(-100),null,2));
   console.log(JSON.stringify({ exitCode:entry.exitCode,elapsedMs:entry.elapsedMs, stats:entry.stats, failing:entry.samples?.filter(x=>x.status!=='passed').slice(0,15), evidence:'.playwright-fast/last-run.json', console:entry.console },null,2));
 } else {
-  console.error('Non-JSON Playwright result or infrastructure error:',(result.stderr||result.stdout).slice(-6000));
+  const diagnostic = [result.error?.message, result.stderr, result.stdout].filter(Boolean).join('\n') || 'No output from Playwright process';
+  console.error('Non-JSON Playwright result or infrastructure error:', diagnostic.slice(-6000));
   console.error(`Console output: ${entry.console}`);
 }
 if (emptySuite) console.error('ERROR: Playwright reported zero tests; not a passing validation');
