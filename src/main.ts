@@ -2,8 +2,10 @@ import type { ExtensionAPI } from '@oh-my-pi/pi-coding-agent';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+const PLUGIN_VERSION = '2.0.3';
 const script = fileURLToPath(new URL('../bin/pw-smart.mjs', import.meta.url));
 const actions = ['doctor', 'setup', 'plan', 'run'] as const;
+const actions = ['version', 'doctor', 'setup', 'plan', 'run', 'debug'] as const;
 const profiles = ['quick', 'smoke', 'affected', 'failed', 'matrix', 'full'] as const;
 const browsers = ['chromium', 'firefox', 'webkit', 'all'] as const;
 
@@ -52,6 +54,7 @@ export default function (pi: ExtensionAPI) {
   });
   pi.registerCommand('pw-fast', {
     description: 'Playwright fast QA: /pw-fast [doctor|setup|plan|run] [--profile quick|affected|matrix] ...',
+    description: 'Playwright fast QA: /pw-fast [version|doctor|setup|plan|run|debug] [--profile quick|affected|matrix] ...',
     handler: async (input, ctx) => {
       // Command dispatches a reproducible QA workflow through the agent; it does not silently execute shell code.
       const safe = input.trim() || 'plan --profile affected';

@@ -1,17 +1,25 @@
 # OMP Playwright Fast v2.0 — plugin-first browser QA
+# OMP Playwright Fast v2.0.3 — plugin-first browser QA
 
+> **v2.0.3 release:** Adds debug console capture and bounded inspection alongside the existing version fingerprinting and diagnostics.
 A reusable OMP plugin bundling a discoverable skill, slash command, model-callable browser QA tool, and smart CLI. v2 upgrades the earlier standalone v1 skill. No Python dependency.
 
+**Preferred repair:** Keep the plugin in a stable directory, extract v2.0.3 there, relink to that exact directory, then fully restart the OMP PROCESS (not merely the model session). For example, from the parent containing `omp-playwright-fast-v2/`:
+unzip -o /path/to/omp-playwright-fast-v2.0.3.zip
+v2.0.3 explicitly starts `node` (never `process.execPath`) for the CLI runner,
+/pw-fast version   # MUST report v2.0.3 and the loaded extension path
 ## Install (recommended)
 
 ```bash
 unzip omp-playwright-fast-v2.0.zip
+unzip omp-playwright-fast-v2.0.3.zip
 cd omp-playwright-fast-v2
 ./install.sh --plugin
 # equivalent: omp plugin link "$PWD"
 ```
 
 Plugin links target a local directory; **do not delete or move the extracted folder after linking**. For distribution, publish to a git repository with package.json and then install by a pinned git ref (e.g. `omp plugin install 'git+https://github.com/ORG/REPO.git#v2.0.0'` once it exists). No remote repo is assumed to exist yet. Restart OMP or reload plugins after installation. Check `omp plugin list`.
+Plugin links target a local directory; **do not delete or move the extracted folder after linking**. For distribution, publish to a git repository with package.json and then install by a pinned git ref (e.g. `omp plugin install 'git+https://github.com/ORG/REPO.git#v2.0.3'` once it exists). No remote repo is assumed to exist yet. Restart OMP or reload plugins after installation. Check `omp plugin list`.
 
 Standalone fallback (does not register extension tools): `./install.sh --global-skill` or `./install.sh --project-skill /code/project`. Avoid installing both copies under the same skill name; native skill locations have higher discovery priority than plugin-bundled skills.
 

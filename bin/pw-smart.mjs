@@ -4,6 +4,7 @@ import { cpus, freemem } from 'node:os';
 import { resolve, dirname, relative, extname } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
+const RUNNER_VERSION = '2.0.3';
 const ROOT = process.cwd();
 const DIR = resolve(ROOT, '.playwright-fast');
 const args = process.argv.slice(2);
@@ -21,9 +22,11 @@ for (let i=0;i<args.length;i++) {
   } else if (x==='--dry-run') opts.dryRun=true;
   else if (x==='--with-deps') opts.withDeps=true;
   else if (x==='--help' || x==='-h') { console.log('pw-smart.mjs doctor|setup|plan|run --profile quick|smoke|affected|failed|matrix|full --browser chromium|firefox|webkit|all --workers N --base REF --dry-run --with-deps'); process.exit(0); }
+  else if (x==='--help' || x==='-h') { console.log('pw-smart.mjs version|doctor|setup|plan|run|debug --profile quick|smoke|affected|failed|matrix|full --browser chromium|firefox|webkit|all --workers N --base REF --lines N --dry-run --with-deps'); process.exit(0); }
   else die(`unknown option ${x}`);
 }
 if (!['doctor','setup','plan','run'].includes(command)) die('invalid command');
+if (!['version','doctor','setup','plan','run','debug'].includes(command)) die('invalid command');
 if (!validProfiles.includes(opts.profile)) die('invalid profile');
 if (!browsers.includes(opts.browser)) die('invalid browser');
 if (opts.workers != null && (!/^\d+$/.test(String(opts.workers)) || +opts.workers<1 || +opts.workers>32)) die('workers must be 1..32');
