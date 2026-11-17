@@ -17,6 +17,7 @@ if [[ "$MODE" == plugin ]]; then
  echo "Linking OMP plugin from $HERE"
  omp plugin link "$HERE"
  echo 'Restart OMP or reload plugins, then run /pw-fast plan --profile affected'
+ echo 'In new OMP: /pw-fast version (must say v2.0.3); then /pw-fast doctor.'
  exit 0
 fi
 if [[ "$MODE" == global ]]; then dest="$HOME/.omp/agent/skills/playwright-fast"; else

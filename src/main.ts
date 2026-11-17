@@ -25,14 +25,15 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: 'playwright_fast',
     label: 'Playwright Fast QA',
-    description: 'Run or plan targeted Playwright QA in the current Node web project. Use for UI changes, interactions, visual layout, responsive behavior, browser regressions. Plan first when cost uncertain. Runs Chromium by default; matrix across Chromium, Firefox and WebKit for release.',
+    description: 'Run or plan targeted Playwright QA in the current Node web project, or inspect captured debug console output. Use for UI changes, interactions, visual layout, responsive behavior, browser regressions. Plan first when cost uncertain. Runs Chromium by default; matrix across Chromium, Firefox and WebKit for release.',
     approval: 'exec',
     parameters: z.object({
-      action: z.enum(actions).describe('plan is non-executing; run invokes actual tests; setup installs project dependencies and browsers'),
+      action: z.enum(actions).describe('plan is non-executing; run invokes actual tests; debug inspects the latest captured console output; setup installs project dependencies and browsers'),
       profile: z.enum(profiles).optional(),
       browser: z.enum(browsers).optional(),
       workers: z.number().int().min(1).max(32).optional(),
       base: z.string().optional().describe('Git comparison revision for impact analysis'),
+      lines: z.number().int().min(1).max(10000).optional().describe('Number of captured console lines to print for debug'),
       dryRun: z.boolean().optional(),
       withDeps: z.boolean().optional().describe('Explicit approval needed before OS package changes')
     }),
@@ -42,6 +43,7 @@ export default function (pi: ExtensionAPI) {
       if (params.browser) args.push('--browser', params.browser);
       if (params.workers) args.push('--workers', String(params.workers));
       if (params.base) args.push('--base', params.base);
+      if (params.lines) args.push('--lines', String(params.lines));
       if (params.dryRun) args.push('--dry-run');
       if (params.withDeps) args.push('--with-deps');
       const result = await execute(ctx.cwd, args, signal);

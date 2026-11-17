@@ -41,6 +41,7 @@ node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs plan --profile affected
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs run --profile affected
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs setup --browser all
 node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs run --profile matrix
+node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs debug --lines 80
 ```
 
 `--dry-run` works with setup and run. `plan` is inherently non-executing. `--with-deps` permits Playwright to install Linux system packages (may require root); it is never the default. `--workers N` caps concurrency at 32; default clamps to 4, free memory, and available CPU. `--base REF` specifies git comparison ref (default HEAD; working-tree edits and untracked files are included). Existing Playwright config is respected. Set up your test configuration yourself if none exists, using `skills/playwright-fast/templates/playwright.config.ts` as a starting point.
@@ -51,7 +52,7 @@ node /path/to/omp-playwright-fast-v2/bin/pw-smart.mjs run --profile matrix
 
 ## Execution history and evidence
 
-`.playwright-fast/last-run.json` contains timings, exit code, samples and Playwright's JSON summary (when produced). `.playwright-fast/history.json` retains the most recent 100 parseable runs. These histories are the foundation for later predictive scheduling; **v2 records measurements but does not yet reorder or shard based on historical duration**. Run output is reduced to summary and failures; inspect Playwright HTML/traces separately as configured.
+`.playwright-fast/last-run.json` contains timings, exit code, samples, the console artifact path and Playwright's JSON summary (when produced). `.playwright-fast/last-run.console.log` retains labeled stdout/stderr from the latest run; inspect its bounded tail with `debug --lines N`. `.playwright-fast/history.json` retains the most recent 100 parseable runs. These histories are the foundation for later predictive scheduling; **v2 records measurements but does not yet reorder or shard based on historical duration**. Run output is reduced to summary and failures; inspect Playwright HTML/traces separately as configured.
 
 ## Important operational constraints
 

@@ -8,14 +8,14 @@ const ROOT = process.cwd();
 const DIR = resolve(ROOT, '.playwright-fast');
 const args = process.argv.slice(2);
 const command = args.shift() || 'plan';
-const opts = { profile: 'affected', browser: 'chromium', base: 'HEAD', dryRun: false, withDeps: false, workers: null };
+const opts = { profile: 'affected', browser: 'chromium', base: 'HEAD', dryRun: false, withDeps: false, workers: null, lines: 80 };
 const validProfiles = ['quick', 'smoke', 'affected', 'failed', 'matrix', 'full'];
 const browsers = ['chromium', 'firefox', 'webkit', 'all'];
 function die(s) { console.error(`ERROR: ${s}`); process.exit(2); }
 function shell(cmd, a, options = {}) { return spawnSync(cmd, a, { cwd: ROOT, encoding: 'utf8', maxBuffer: 32*1024*1024, ...options }); }
 for (let i=0;i<args.length;i++) {
   const x = args[i];
-  if (['--profile','--browser','--workers','--base'].includes(x)) {
+  if (['--profile','--browser','--workers','--base','--lines'].includes(x)) {
     if (i+1>=args.length) die(`${x} needs value`);
     const key = x.slice(2).replace(/-([a-z])/g, (_,s)=>s.toUpperCase()); opts[key] = args[++i];
   } else if (x==='--dry-run') opts.dryRun=true;
@@ -28,6 +28,14 @@ if (!validProfiles.includes(opts.profile)) die('invalid profile');
 if (!browsers.includes(opts.browser)) die('invalid browser');
 if (opts.workers != null && (!/^\d+$/.test(String(opts.workers)) || +opts.workers<1 || +opts.workers>32)) die('workers must be 1..32');
 if (!existsSync('package.json')) die('run from the web project root (package.json missing)');
+if (!/^\d+$/.test(String(opts.lines)) || +opts.lines<1 || +opts.lines>10000) die('lines must be 1..10000');
+if (command === 'debug') {
+  const consolePath = resolve(DIR, 'last-run.console.log');
+  if (!existsSync(consolePath)) die('no captured console output; run Playwright first');
+  const output = readFileSync(consolePath, 'utf8').trimEnd();
+  console.log(output ? output.split('\n').slice(-+opts.lines).join('\n') : '(no console output captured)');
+  process.exit(0);
+}
 const pm = existsSync('bun.lock') || existsSync('bun.lockb') ? 'bun' : existsSync('pnpm-lock.yaml') ? 'pnpm' : existsSync('yarn.lock') ? 'yarn' : 'npm';
 const pw = resolve(ROOT, 'node_modules/.bin/playwright');
 const hasPW = existsSync(pw);
@@ -112,10 +120,13 @@ if (command==='plan'||opts.dryRun) process.exit(0);
 mkdirSync(DIR,{recursive:true});
 const started=Date.now();
 const result=shell(pw,[...cli,'--reporter=json'],{ maxBuffer:64*1024*1024 });
+const consolePath=resolve(DIR,'last-run.console.log');
+const consoleOutput=[result.stdout ? `[stdout]\n${result.stdout}` : '', result.stderr ? `[stderr]\n${result.stderr}` : ''].filter(Boolean).join('\n');
+writeFileSync(consolePath, consoleOutput ? `${consoleOutput}\n` : '');
 let parsed=null;
 try { parsed=JSON.parse(result.stdout); } catch {}
 const emptySuite = parsed && (parsed.stats?.expected ?? 0) + (parsed.stats?.unexpected ?? 0) + (parsed.stats?.flaky ?? 0) + (parsed.stats?.skipped ?? 0) === 0;
-const entry={ timestamp:new Date().toISOString(), elapsedMs:Date.now()-started, exitCode:emptySuite ? 3 : (result.status??1), profile, browser:chosen, workers, changedFiles:impact.files, selectionMode:profile==='affected'?impact.mode:'profile', stats:parsed?.stats??null };
+const entry={ timestamp:new Date().toISOString(), elapsedMs:Date.now()-started, exitCode:emptySuite ? 3 : (result.status??1), profile, browser:chosen, workers, changedFiles:impact.files, selectionMode:profile==='affected'?impact.mode:'profile', stats:parsed?.stats??null, console:relative(ROOT,consolePath) };
 if(parsed){
   const samples=[];
   function visit(suite) {
@@ -130,9 +141,10 @@ if(parsed) {
   const historyPath=resolve(DIR,'history.json');
   let history=[]; try { history=JSON.parse(read(historyPath)); if(!Array.isArray(history)) history=[]; } catch {}
   history.push(entry); writeFileSync(historyPath, JSON.stringify(history.slice(-100),null,2));
-  console.log(JSON.stringify({ exitCode:entry.exitCode,elapsedMs:entry.elapsedMs, stats:entry.stats, failing:entry.samples?.filter(x=>x.status!=='passed').slice(0,15), evidence:'.playwright-fast/last-run.json' },null,2));
+  console.log(JSON.stringify({ exitCode:entry.exitCode,elapsedMs:entry.elapsedMs, stats:entry.stats, failing:entry.samples?.filter(x=>x.status!=='passed').slice(0,15), evidence:'.playwright-fast/last-run.json', console:entry.console },null,2));
 } else {
   console.error('Non-JSON Playwright result or infrastructure error:',(result.stderr||result.stdout).slice(-6000));
+  console.error(`Console output: ${entry.console}`);
 }
 if (emptySuite) console.error('ERROR: Playwright reported zero tests; not a passing validation');
 process.exit(entry.exitCode);

@@ -39,7 +39,7 @@
 
 - Shard on independent CI agents: `--shard 1/3`, `2/3`, `3/3`. Sharding serially on the same machine does not speed up work.
 - `--list` discovers tests without browser test execution; wrapper `--dry-run` only prints planned commands.
-- Shell runner records `.playwright-fast/last-run.log` and `.playwright-fast/last-run.summary`; `playwright-report/` is from Playwright HTML reporter.
+- Shell runner records `.playwright-fast/last-run.log` and `.playwright-fast/last-run.summary`; smart runner records `.playwright-fast/last-run.console.log`, inspectable with `debug --lines N`.
 - Use per-job unique output directories for parallel CI jobs; otherwise reporters may clobber artifacts. For distributed CI use blob reporters and `merge-reports` outside this basic runner.
 - On failures report short stack, browser/project, test path, trace, how reproducible, severity. Don't dump whole logs into LLM context.
 
