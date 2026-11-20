@@ -34,7 +34,9 @@ if [[ "$MODE" == global ]]; then dest="$HOME/.omp/agent/skills/playwright-fast";
 fi
 if [[ -e "$dest" ]]; then
  if (( ! FORCE )); then echo "Already exists: $dest (use --force)" >&2; exit 1; fi
- mv "$dest" "${dest}.bak.$(date +%s)"
+  backup="${dest}.bak.$(date +%s).$$"
+  if [[ -e "$backup" ]]; then echo "Backup already exists: $backup" >&2; exit 1; fi
+  mv -- "$dest" "$backup"
 fi
 mkdir -p "$(dirname "$dest")"
 cp -a "$HERE/skills/playwright-fast" "$dest"

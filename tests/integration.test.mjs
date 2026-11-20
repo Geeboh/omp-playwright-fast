@@ -3,11 +3,11 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, copyFileSync, rmSy
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { test } from 'node:test';
 import * as nodeModule from 'node:module';
 
-const pluginRoot = resolve(import.meta.dirname, '..');
+const pluginRoot = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const runner = resolve(pluginRoot, 'bin/pw-smart.mjs');
 const diagnostic = resolve(pluginRoot, 'scripts/diagnose-install.mjs');
 
@@ -17,12 +17,17 @@ function fixture() {
   writeFileSync(join(dir, 'package.json'), '{"name":"test-app","private":true}');
   writeFileSync(join(dir, 'playwright.config.js'), '// test fixture\n');
   writeFileSync(join(dir, 'node_modules/.bin/playwright'), `#!/usr/bin/env node
-if (process.argv.includes('install')) process.exit(0);
+if (process.argv.includes('install')) {
+  if (process.env.RECORD_INSTALL_ARGS) require('node:fs').writeFileSync(process.env.RECORD_INSTALL_ARGS, JSON.stringify(process.argv.slice(2)));
+  process.exit(0);
+}
 if (process.argv.includes('test')) {
+  if (process.env.FAKE_MALFORMED_JSON === '1') { console.log('not json'); process.exit(0); }
   const passed = process.env.FAKE_ZERO_TESTS !== '1';
+  const skipped = process.env.FAKE_SKIPPED_TESTS === '1';
   console.log(JSON.stringify({
-    stats: { expected: passed ? 1 : 0, unexpected: 0, flaky: 0, skipped: 0 },
-    suites: passed ? [{ specs: [{ file: 'tests/smoke.spec.ts', title: 'ok', tests: [{ projectName: 'chromium', results: [{ status: 'passed', duration: 9 }] }] }] }] : [],
+    stats: { expected: skipped ? 0 : (passed ? 1 : 0), unexpected: 0, flaky: 0, skipped: skipped ? 1 : 0 },
+    suites: skipped ? [] : (passed ? [{ specs: [{ file: 'tests/smoke.spec.ts', title: 'ok', tests: [{ projectName: 'chromium', results: [{ status: 'passed', duration: 9 }] }] }] }] : []),
   }));
   console.error('fixture debug stderr');
   process.exit(0);
@@ -72,6 +77,22 @@ test('run: writes concise history on successful JSON output', () => {
   } finally { rmSync(root, {recursive:true, force:true}); }
 });
 
+test('run: malformed JSON is a failure', () => {
+  const root = fixture();
+  try {
+    const result = call(root, ['run', '--profile', 'affected'], {FAKE_MALFORMED_JSON: '1'});
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+  } finally { rmSync(root, {recursive:true, force:true}); }
+});
+
+test('run: all skipped tests are not a passing validation', () => {
+  const root = fixture();
+  try {
+    const result = call(root, ['run', '--profile', 'affected'], {FAKE_SKIPPED_TESTS: '1'});
+    assert.equal(result.status, 3, result.stdout + result.stderr);
+  } finally { rmSync(root, {recursive:true, force:true}); }
+});
+
 test('run: captures and inspects debug console output', () => {
   const root = fixture();
   try {
@@ -96,10 +117,12 @@ test('run: zero tests is a failure, not a green check', () => {
 test('setup: browser=all installs three browser engines via the Playwright binary, not omp', () => {
   const root = fixture();
   try {
-    const result = call(root, ['setup', '--browser', 'all']);
+    const argsPath = join(root, 'install-args.json');
+    const result = call(root, ['setup', '--browser', 'all'], {RECORD_INSTALL_ARGS: argsPath});
     assert.equal(result.status, 0, result.stderr + result.stdout);
     assert.match(result.stdout, /chromium,firefox,webkit/);
     assert.match(result.stdout, /node_modules\/\.bin\/playwright/);
+    assert.deepEqual(JSON.parse(readFileSync(argsPath, 'utf8')), ['install','chromium','firefox','webkit']);
     assert.doesNotMatch(result.stderr, /unknown flag: --browser/);
   } finally { rmSync(root, { recursive:true, force:true }); }
 });
@@ -144,6 +167,32 @@ test('install diagnostic identifies current and stale project plugin copies', ()
     assert.ok(broken.pluginCopies[0].staleProcessExecPath);
     assert.ok(broken.issues.length>0);
   } finally { rmSync(root,{recursive:true,force:true}); }
+});
+
+test('install diagnostic rejects a missing project value', () => {
+  const root = mkdtempSync(join(tmpdir(), 'omp-pwfast-invalid-project-'));
+  try {
+    const result = spawnSync(process.execPath, [diagnostic, '--project', '--json'], {cwd:root, encoding:'utf8'});
+    assert.equal(result.status, 2);
+    assert.match(result.stderr, /--project needs value/);
+  } finally { rmSync(root, {recursive:true, force:true}); }
+});
+
+test('install diagnostic reports symlinked native extensions deterministically', () => {
+  const root = mkdtempSync(join(tmpdir(), 'omp-pwfast-native-'));
+  const dir = join(root, '.omp/extensions');
+  try {
+    mkdirSync(dir, {recursive:true});
+    writeFileSync(join(dir, 'z.mjs'), 'register playwright_fast');
+    writeFileSync(join(dir, 'b.mjs'), 'register playwright_fast');
+    symlinkSync(join(dir, 'z.mjs'), join(dir, 'a.mjs'));
+    const result = spawnSync(process.execPath, [diagnostic, '--project', root, '--json'], {cwd:root, encoding:'utf8'});
+    assert.equal(result.status, 0, result.stderr);
+    const report = JSON.parse(result.stdout);
+    const files = report.nativeExtensionCopies.map((entry) => entry.file);
+    assert.ok(files.includes(join(dir, 'a.mjs')));
+    assert.deepEqual(files, [...files].sort());
+  } finally { rmSync(root, {recursive:true, force:true}); }
 });
 
 test('extension: uses Node runner and surfaces failed subprocesses as tool errors', async (t) => {
