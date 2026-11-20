@@ -1,10 +1,8 @@
-# Changelog
-
-## v2.0.3 — Debug console inspection
+# v2.0.3 — Debug console inspection
 
 - Add `debug --lines N` to inspect the latest Playwright stdout/stderr capture.
 
-## v2.0.2 — Loaded-version and setup diagnostics
+# v2.0.2 — Loaded-version and setup diagnostics
 
 - Add `/pw-fast version` (in-process, no model/tool subprocess) and `playwright_fast({action:'version'})` with extension path and Node command.
 - Include v2.0.2 version marker in all successful tool outputs and JSON CLI plans/doctor.
@@ -12,6 +10,8 @@
 - Explicitly document full OMP process restart for extension updates and project-scoped plugin shadowing.
 - Add regression test for `setup --browser all` through both runner and extension, and tests for diagnostics.
 - Allow `doctor` and `version` without project `package.json` (setup/run still require a project).
+
+# Changelog
 
 ## v2.0.1 — runtime hotfix
 

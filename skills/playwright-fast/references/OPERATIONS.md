@@ -11,7 +11,7 @@
 | matrix | all configured browser projects | cross-browser release validation |
 | full | same as matrix, expandable by project | feature freeze |
 
-`--browser` at run time is currently reserved for setup selection and does not override profiles. To run just Firefox, call the project-local Playwright CLI directly with `test --project=firefox`. Matrix and full profiles use all configured projects, regardless of `--browser`.
+`--browser` at run time is currently reserved for setup selection and does not override profiles. To run just Firefox, call the project-local Playwright CLI directly with `test --project=firefox`.
 
 ## Bootstrap/install
 

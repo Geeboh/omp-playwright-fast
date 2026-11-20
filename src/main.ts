@@ -1,7 +1,6 @@
 import type { ExtensionAPI } from '@oh-my-pi/pi-coding-agent';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { StringDecoder } from 'node:string_decoder';
 
 const PLUGIN_VERSION = '2.0.3';
 const script = fileURLToPath(new URL('../bin/pw-smart.mjs', import.meta.url));
@@ -19,18 +18,9 @@ function execute(cwd: string, args: string[], signal?: AbortSignal): Promise<{ c
   return new Promise((resolve) => {
     let finished = false;
     let output = '';
-    const stdoutDecoder = new StringDecoder();
-    const stderrDecoder = new StringDecoder();
-    const append = (decoder: StringDecoder, chunk: Buffer | Uint8Array) => {
-      output += decoder.write(chunk);
-      if (output.length > 16000) output = output.slice(-16000);
-    };
     const finish = (code: number, message = '') => {
       if (finished) return;
       finished = true;
-      output += stdoutDecoder.end();
-      output += stderrDecoder.end();
-      if (output.length > 16000) output = output.slice(-16000);
       resolve({ code, output: message + output });
     };
     try {
@@ -41,9 +31,13 @@ function execute(cwd: string, args: string[], signal?: AbortSignal): Promise<{ c
         signal,
         shell: false,
       });
-      child.stdout.on('data', (chunk: Buffer) => append(stdoutDecoder, chunk));
-      child.stderr.on('data', (chunk: Buffer) => append(stderrDecoder, chunk));
-      child.on('error', (err) => finish(1, signal?.aborted ? 'QA runner cancelled\n' : `Could not launch Node runtime '${nodeRuntime}': ${err.message}\nEnsure Node.js 20+ is on PATH or set OMP_PLAYWRIGHT_NODE to its absolute path.\n`));
+      for (const stream of [child.stdout, child.stderr]) {
+        stream.on('data', (chunk: Buffer) => {
+          output += chunk.toString();
+          if (output.length > 16000) output = output.slice(-16000);
+        });
+      }
+      child.on('error', (err) => finish(1, `Could not launch Node runtime '${nodeRuntime}': ${err.message}\nEnsure Node.js 20+ is on PATH or set OMP_PLAYWRIGHT_NODE to its absolute path.\n`));
       child.on('close', (code, exitSignal) => finish(code ?? 1, exitSignal ? `QA runner terminated by ${exitSignal}\n` : ''));
     } catch (err) {
       finish(1, `Could not launch QA runner: ${String(err)}\n`);
@@ -56,7 +50,7 @@ export default function (pi: ExtensionAPI) {
   pi.registerTool({
     name: 'playwright_fast',
     label: 'Playwright Fast QA',
-    description: 'Run or plan targeted Playwright QA in the current Node web project, or inspect captured debug console output. Use for UI changes, interactions, visual layout, responsive behavior, browser regressions. Plan first when cost uncertain. Runs Chromium by default; matrix runs all configured projects, so verify configured engine names for release.',
+    description: 'Run or plan targeted Playwright QA in the current Node web project, or inspect captured debug console output. Use for UI changes, interactions, visual layout, responsive behavior, browser regressions. Plan first when cost uncertain. Runs Chromium by default; matrix across Chromium, Firefox and WebKit for release.',
     approval: 'exec',
     parameters: z.object({
       action: z.enum(actions).describe('plan is non-executing; run invokes actual tests; debug inspects the latest captured console output; setup installs project dependencies and browsers'),

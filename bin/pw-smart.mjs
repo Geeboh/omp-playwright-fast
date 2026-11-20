@@ -39,7 +39,7 @@ if (command === 'debug') {
   process.exit(0);
 }
 if (!packagePresent && command !== 'doctor') die('run from the web project root (package.json missing)');
-const pm = existsSync('pnpm-lock.yaml') ? 'pnpm' : existsSync('yarn.lock') ? 'yarn' : (existsSync('bun.lock') || existsSync('bun.lockb')) ? 'bun' : 'npm';
+const pm = existsSync('bun.lock') || existsSync('bun.lockb') ? 'bun' : existsSync('pnpm-lock.yaml') ? 'pnpm' : existsSync('yarn.lock') ? 'yarn' : 'npm';
 const pw = resolve(ROOT, 'node_modules/.bin/playwright');
 const hasPW = existsSync(pw);
 const hasConfig = ['ts','js','mts','mjs','cts','cjs'].some(s => existsSync(`playwright.config.${s}`));
@@ -128,8 +128,8 @@ const consoleOutput=[result.stdout ? `[stdout]\n${result.stdout}` : '', result.s
 writeFileSync(consolePath, consoleOutput ? `${consoleOutput}\n` : '');
 let parsed=null;
 try { parsed=JSON.parse(result.stdout); } catch {}
-const emptySuite = parsed && (parsed.stats?.expected ?? 0) + (parsed.stats?.unexpected ?? 0) + (parsed.stats?.flaky ?? 0) === 0;
-const entry={ timestamp:new Date().toISOString(), elapsedMs:Date.now()-started, exitCode: parsed ? (emptySuite ? 3 : (result.status??1)) : ((result.status??0) || 1), profile, browser:chosen, workers, changedFiles:impact.files, selectionMode:profile==='affected'?impact.mode:'profile', stats:parsed?.stats??null, console:relative(ROOT,consolePath) };
+const emptySuite = parsed && (parsed.stats?.expected ?? 0) + (parsed.stats?.unexpected ?? 0) + (parsed.stats?.flaky ?? 0) + (parsed.stats?.skipped ?? 0) === 0;
+const entry={ timestamp:new Date().toISOString(), elapsedMs:Date.now()-started, exitCode:emptySuite ? 3 : (result.status??1), profile, browser:chosen, workers, changedFiles:impact.files, selectionMode:profile==='affected'?impact.mode:'profile', stats:parsed?.stats??null, console:relative(ROOT,consolePath) };
 if(parsed){
   const samples=[];
   function visit(suite) {

@@ -5,7 +5,7 @@ PROFILE=quick; BROWSER=chromium; WORKERS=""; SHARD=""; DRY=0; WITH_DEPS=0; CI_MO
 usage(){ cat <<'HELP'
 pw-fast.sh <doctor|setup|run|help> [options]
   --profile smoke|quick|changed|failed|matrix|full (default quick)
-  --browser chromium|firefox|webkit|all (setup; run profiles select their documented projects)
+  --browser chromium|firefox|webkit|all (setup; run overrides selected profile)
   --workers N       positive integer, maximum worker pool size
   --shard I/N        Playwright shard (intended for separate CI agents)
   --target PATTERN   Playwright test file path or filter
@@ -36,12 +36,10 @@ case "$PROFILE" in smoke|quick|changed|failed|matrix|full) ;; *) die 'Invalid pr
 if [[ -n "$WORKERS" ]]; then [[ "$WORKERS" =~ ^[1-9][0-9]*$ ]] || die 'workers must be positive integer'; fi
 if [[ -n "$MAX_FAILURES" ]]; then [[ "$MAX_FAILURES" =~ ^[1-9][0-9]*$ ]] || die 'max-failures must be positive integer'; fi
 if [[ -n "$SHARD" ]]; then [[ "$SHARD" =~ ^[1-9][0-9]*/[1-9][0-9]*$ ]] || die 'shard should be I/N'; I="${SHARD%/*}"; N="${SHARD#*/}"; ((I<=N)) || die 'shard index exceeds total'; fi
-[[ -z "$TARGET" || "$TARGET" != -* ]] || die 'target must not start with -'
 PM=npm
-if [[ -f pnpm-lock.yaml ]]; then PM=pnpm
-elif [[ -f yarn.lock ]]; then PM=yarn
-elif [[ -f bun.lock || -f bun.lockb ]]; then PM=bun
-fi
+[[ -f pnpm-lock.yaml ]] && PM=pnpm
+[[ -f yarn.lock ]] && PM=yarn
+[[ -f bun.lock || -f bun.lockb ]] && PM=bun
 case "$PM" in npm) EXEC=(./node_modules/.bin/playwright); ADD=(npm install --save-dev @playwright/test);; pnpm) EXEC=(pnpm exec playwright); ADD=(pnpm add -D @playwright/test);; yarn) EXEC=(yarn playwright); ADD=(yarn add -D @playwright/test);; bun) EXEC=(bunx --no-install playwright); ADD=(bun add -d @playwright/test);; esac
 run_command(){ if ((DRY)); then printf 'DRY RUN:'; printf ' %q' "$@"; printf '\n'; else "$@"; fi; }
 configured(){ [[ -f playwright.config.ts || -f playwright.config.js || -f playwright.config.mts || -f playwright.config.mjs || -f playwright.config.cts || -f playwright.config.cjs ]]; }

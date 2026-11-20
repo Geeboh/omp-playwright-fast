@@ -3,7 +3,7 @@
  * Read-only OMP Playwright Fast plugin inventory.
  * Detects common stale/duplicate installation paths without modifying plugin state.
  */
-import { existsSync, lstatSync, statSync, realpathSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync, readdirSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { resolve, join, dirname } from 'node:path';
 
@@ -13,7 +13,7 @@ const args = process.argv.slice(2);
 let project = process.cwd();
 let asJson = false;
 for (let i=0;i<args.length;i++) {
-  if (args[i] === '--project') { const value = args[i+1]; if (!value || value.startsWith('-')) { console.error('--project needs value'); process.exit(2); } project = resolve(value); i++; }
+  if (args[i] === '--project') project = resolve(args[++i] || '');
   else if (args[i] === '--json') asJson = true;
   else if (args[i] === '--help') {
     console.log('node scripts/diagnose-install.mjs [--project /code/project] [--json]');
@@ -65,25 +65,22 @@ while(true) {
 for(const dir of [...new Set(candidateDirs)]) {
   if(!existsSync(dir)) continue;
   let entries=[];
-  try { entries=readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name)); } catch { continue; }
+  try { entries=readdirSync(dir,{withFileTypes:true}); } catch { continue; }
+  // Inspect only direct files/one-level index files to avoid scanning unrelated codebases.
   const paths=[];
-  const regular = (file) => { try { return statSync(file).isFile(); } catch { return false; } };
-  const directory = (file) => { try { return statSync(file).isDirectory(); } catch { return false; } };
-  for (const e of entries) {
-    const entry = join(dir, e.name);
-    if ((e.isFile() || e.isSymbolicLink()) && regular(entry) && /\.(?:ts|js|mjs|cjs)$/.test(e.name)) paths.push(entry);
-    if ((e.isDirectory() || e.isSymbolicLink()) && directory(entry)) for (const name of ['index.ts','index.js','index.mjs','index.cjs']) {
-      const file=join(entry,name); if (regular(file)) paths.push(file);
+  for(const e of entries){
+    if(e.isFile() && /\.(?:ts|js|mjs|cjs)$/.test(e.name)) paths.push(join(dir,e.name));
+    if(e.isDirectory()) for (const name of ['index.ts','index.js','index.mjs','index.cjs']) {
+      const file=join(dir,e.name,name); if(existsSync(file)) paths.push(file);
     }
   }
-  for (const file of paths.sort()) {
+  for (const file of paths) {
     const source=text(file);
     if(source.includes('playwright_fast') || source.includes('Playwright Fast QA'))
       native.push({file, processExecPath:source.includes('spawn(process.execPath')});
   }
 }
 
-native.sort((a,b)=>a.file.localeCompare(b.file));
 const issues=[];
 if(discovered.length===0) issues.push('No conventional OMP plugin installation found; inspect omp plugin list and configured extension paths.');
 for(const x of discovered) if(!x.current) issues.push(`Outdated/broken plugin copy: ${x.slot} -> ${x.target || '(broken link)'} (v${x.version}).`);
